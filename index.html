@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Generator</title>
@@ -7,35 +7,136 @@
 </head>
 <body>
 <div class="container">
+    <h2>QR Code Generator</h2>
     <p>
         Enter your text or URL
     </p>
-    <input type="text" placeholder="Text or URL" id="qrText">
+    <form id="qrForm" onsubmit="return false;">
+        <label for="qrText" class="visually-hidden">Enter text or URL</label>
+        <input type="text" 
+               placeholder="Text or URL" 
+               id="qrText" 
+               name="qrText"
+               aria-describedby="input-hint"
+               maxlength="500"
+               autocomplete="off">
+        <p id="input-hint" class="hint">Maximum 500 characters</p>
+        <div id="error-message" class="error" role="alert" aria-live="polite"></div>
+    </form>
 
-    <div id="imgBox">
-        <img src="" id="qrImage">
+    <div id="imgBox" role="img" aria-label="Generated QR Code" hidden>
+        <img src="" id="qrImage" alt="Generated QR Code">
     </div>
 
-    <button onclick="generateQR()">Generate QR code</button>
+    <button type="button" onclick="generateQR()">Generate QR code</button>
 </div>
 
 <script>
-    
-    let imgBox = document.getElementById("imgBox");
-    let qrImage = document.getElementById("qrImage");
-    let qrText = document.getElementById("qrText");
+    const API_URL = "https://api.qrserver.com/v1/create-qr-code/";
+    const QR_SIZE = "150x150";
+    const MAX_LENGTH = 500;
 
-    function generateQR() {
-        if(qrText.value.length>0){
-        qrImage.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + qrText.value;
-        imgBox.classList.add("show-img");
-    }else{
-        qrText.classList.add("error");
-        setTimeout(()=>{
-            qrText.classList.remove ("error");        
-        },1000);
+    const imgBox = document.getElementById("imgBox");
+    const qrImage = document.getElementById("qrImage");
+    const qrText = document.getElementById("qrText");
+    const errorMessage = document.getElementById("error-message");
+
+    /**
+     * Sanitizes user input to prevent XSS and injection attacks
+     * @param {string} input - Raw user input
+     * @returns {string} - Sanitized input safe for URL encoding
+     */
+    function sanitizeInput(input) {
+        // Trim whitespace and limit length
+        let sanitized = input.trim().slice(0, MAX_LENGTH);
+        
+        // Remove any potentially dangerous characters
+        // Allow: alphanumeric, common URL chars, basic punctuation
+        sanitized = sanitized.replace(/[<>'"\\;`]/g, '');
+        
+        return sanitized;
     }
-}
+
+    /**
+     * Validates the input and shows appropriate error messages
+     * @returns {boolean} - Whether input is valid
+     */
+    function validateInput() {
+        const value = qrText.value.trim();
+        errorMessage.textContent = '';
+        errorMessage.hidden = true;
+        qrText.classList.remove("error");
+
+        if (!value) {
+            showError("Please enter text or a URL");
+            return false;
+        }
+
+        if (value.length > MAX_LENGTH) {
+            showError(`Input exceeds maximum length of ${MAX_LENGTH} characters`);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Shows an error message to the user
+     * @param {string} message - Error message to display
+     */
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.hidden = false;
+        qrText.classList.add("error");
+        
+        setTimeout(() => {
+            qrText.classList.remove("error");
+        }, 1000);
+    }
+
+    /**
+     * Generates a QR code based on user input
+     */
+    function generateQR() {
+        if (!validateInput()) {
+            return;
+        }
+
+        const sanitizedValue = sanitizeInput(qrText.value);
+        
+        if (!sanitizedValue) {
+            showError("Invalid input - please use alphanumeric characters only");
+            return;
+        }
+
+        try {
+            // Use URLSearchParams for proper URL encoding
+            const params = new URLSearchParams({
+                size: QR_SIZE,
+                data: sanitizedValue
+            });
+            
+            qrImage.src = `${API_URL}?${params.toString()}`;
+            qrImage.alt = `QR Code for: ${sanitizedValue.substring(0, 50)}${sanitizedValue.length > 50 ? '...' : ''}`;
+            imgBox.hidden = false;
+            
+            // Handle image load errors
+            qrImage.onerror = function() {
+                showError("Failed to generate QR code - please try again");
+                imgBox.hidden = true;
+            };
+        } catch (error) {
+            showError("An error occurred while generating the QR code");
+        }
+    }
+
+    // Add keyboard support (Enter key)
+    qrText.addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            generateQR();
+        }
+    });
 </script>
 
 </body>
